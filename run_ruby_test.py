@@ -50,7 +50,7 @@ class StatusProcess(object):
       if self.listener.is_running:
         if len(progress) > 10 * 3:
           progress = ""
-        progress += " :)"
+        progress += " ."
         sublime.set_timeout(functools.partial(self.listener.update_status, self.msg, progress), 0)
         time.sleep(1)
       else:
@@ -63,6 +63,9 @@ class RunSingleRubyTest(sublime_plugin.WindowCommand):
     global RUBY_UNIT; RUBY_UNIT = s.get("ruby_unit_exec")
     global CUCUMBER_UNIT; CUCUMBER_UNIT = s.get("ruby_cucumber_exec")
     global RSPEC_UNIT; RSPEC_UNIT = s.get("ruby_rspec_exec")
+    global RUBY_UNIT_FOLDER; RUBY_UNIT_FOLDER = s.get("ruby_unit_folder")
+    global CUCUMBER_UNIT_FOLDER; CUCUMBER_UNIT_FOLDER = s.get("ruby_cucumber_folder")
+    global RSPEC_UNIT_FOLDER; RSPEC_UNIT_FOLDER = s.get("ruby_rspec_folder")
 
   def show_tests_panel(self):
     if not hasattr(self, 'output_view'):
@@ -96,12 +99,6 @@ class RunSingleRubyTest(sublime_plugin.WindowCommand):
     sublime.status_message(msg + " " + progress)
 
   def project_path(self, path, command):
-    return "cd " + path + " && cd ../.." + " && " + command
-
-  def cucumber_project_path(self, path, command):
-    return 'cd ' + path + " && cd .. " +" && " + command
-
-  def rspec_project_path(self, path, command):
     return "cd " + path + " && " + command
 
   def is_unit(self, file_name):
@@ -132,24 +129,27 @@ class RunSingleRubyTest(sublime_plugin.WindowCommand):
       test_name = match_obj.group(1)[::-1]
       find = view.find(test_name, 0)
       row, col = view.rowcol(find.a)
-      test_name = str(row + 1) 
-      ex = self.cucumber_project_path(folder_name, CUCUMBER_UNIT + " " + "features/" + file_name + " -l " + test_name)
+      test_name = str(row + 1)
+      folder_name, feature_folder, file_name = view.file_name().partition(CUCUMBER_UNIT_FOLDER)
+      ex = self.project_path(folder_name, CUCUMBER_UNIT + " " + feature_folder + file_name + " -l " + test_name)
 
     elif self.is_unit(file_name):
       match_obj = re.search('\s?([a-zA-Z_\d]+tset)\s+fed', text_string) # 1st search for 'def test_name'
       if not match_obj:
         match_obj = re.search('\s?(\"[a-zA-Z_\s\d]+\"\s+tset)', text_string) # 2nd search for 'test "name"'
-      
+
       test_name = match_obj.group(1)[::-1]
       test_name = test_name.replace("\"", "").replace(" ", "_") # if test name in 2nd format
-      ex = self.project_path(folder_name, RUBY_UNIT + " " + view.file_name() + " -n " + test_name)
+      folder_name, test_folder, file_name = view.file_name().partition(RUBY_UNIT_FOLDER)
+      ex = self.project_path(folder_name, RUBY_UNIT + " " + test_folder + file_name + " -n " + test_name)
 
     elif self.is_rspec(file_name):
       text_string = text_string.encode( "utf-8" )
       match_obj = re.search('\s?(\"[a-zA-Z_\s\d]+\"\s+ti)', text_string) # tests starts from it "
       test_name = match_obj.group(1)[::-1]
       test_name = test_name.replace("it \"","\"")
-      ex = self.rspec_project_path(folder_name, RSPEC_UNIT + " " + file_name + " -e " + test_name)
+      folder_name, rspec_folder, file_name = view.file_name().partition(RSPEC_UNIT_FOLDER)
+      ex = self.project_path(folder_name , RSPEC_UNIT + " " + rspec_folder + file_name + " -e " + test_name)
 
     if match_obj:
       self.show_tests_panel()
@@ -169,11 +169,14 @@ class RunAllRubyTest(RunSingleRubyTest):
 
     self.show_tests_panel()
     if self.is_unit(file_name):
-      ex = self.project_path(folder_name, RUBY_UNIT + " " + view.file_name())
+      folder_name, test_folder, file_name = view.file_name().partition(RUBY_UNIT_FOLDER)
+      ex = self.project_path(folder_name, RUBY_UNIT + " " + test_folder + file_name )
     elif self.is_rspec(file_name):
-      ex = self.rspec_project_path(folder_name, RSPEC_UNIT + " " + file_name)
+      folder_name, rspec_folder, file_name = view.file_name().partition(RSPEC_UNIT_FOLDER)
+      ex = self.project_path(folder_name , RSPEC_UNIT + " " + rspec_folder + file_name)
     elif self.is_cucumber(file_name):
-      ex = self.cucumber_project_path(folder_name, CUCUMBER_UNIT + " " + "features/" + file_name)
+      folder_name, feature_folder, file_name = view.file_name().partition(CUCUMBER_UNIT_FOLDER)
+      ex = self.project_path(folder_name, CUCUMBER_UNIT + " " + feature_folder + file_name)
     else:
       sublime.error_message("Only *_test.rb, *_spec.rb, *.feature files supported!")
       return
